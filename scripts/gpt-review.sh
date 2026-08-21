@@ -12,6 +12,7 @@
 #
 # 認証（どちらか一方）:
 #   1) ChatGPT アカウント:  codex login          （ブラウザが開きます／要人間操作）
+#                           codex login --device-auth  （ブラウザを開けない環境向け）
 #   2) API キー:            export OPENAI_API_KEY=sk-...  してから実行
 #
 # 出力: docs/reviews/<ISSUE_ID>-<timestamp>.md  ／ 終了コード 0=実行成功, 3=認証エラー, 1=その他失敗
@@ -19,7 +20,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
 
-MODEL="${GPT_REVIEW_MODEL:-gpt-5.1-codex}"
+MODEL="${GPT_REVIEW_MODEL:-}"   # 空なら Codex CLI / API の既定モデルを使う
 ISSUE_ID="${ISSUE_ID:-$(git rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '-')}"
 TS="$(date +%Y%m%d-%H%M%S)"
 OUT_DIR="docs/reviews"
@@ -56,7 +57,7 @@ fi
 
 DIFF_LINES=$(wc -l < "$DIFF_FILE")
 echo "レビュー対象: ${RANGE}  /  ${DIFF_LINES} 行の差分"
-echo "採点モデル  : ${MODEL}（開発元: OpenAI — 実装者とは別ベンダー）"
+echo "採点モデル  : ${MODEL:-(Codex CLI の既定モデル)}（開発元: OpenAI — 実装者とは別ベンダー）"
 
 # ── レビュー指示 ────────────────────────────────────
 read -r -d '' INSTRUCTIONS <<'PROMPT'
@@ -113,8 +114,9 @@ GPT レビューを実行できません: Codex CLI が未認証です。
 
   1) ChatGPT アカウントでログイン
        codex login
-     ※ ブラウザが開きます。SSH/コンテナ越しの場合は
-       codex login --headless  もしくは表示されたURLを手元のブラウザで開いてください。
+     ※ ブラウザが開きます。SSH/コンテナなどブラウザを開けない環境では
+       codex login --device-auth
+       を使い、表示されたコードを手元の端末のブラウザで入力してください。
 
   2) OpenAI API キーを使う
        export OPENAI_API_KEY=sk-...
@@ -124,10 +126,12 @@ MSG
     exit 3
   fi
 
+  CODEX_ARGS=(exec --sandbox read-only --skip-git-repo-check --color never -o "$BODY_FILE")
+  [ -n "$MODEL" ] && CODEX_ARGS+=(--model "$MODEL")
+
   printf '%s\n\n---\n\nレビュー対象の差分（range: %s）:\n\n```diff\n%s\n```\n' \
     "$INSTRUCTIONS" "$RANGE" "$(cat "$DIFF_FILE")" \
-  | codex exec --model "$MODEL" --sandbox read-only --skip-git-repo-check \
-      --color never -o "$BODY_FILE" - >/dev/null 2>"${BODY_FILE}.err"
+  | codex "${CODEX_ARGS[@]}" - >/dev/null 2>"${BODY_FILE}.err"
   RC=$?
   if [ $RC -ne 0 ]; then
     echo "codex exec が失敗しました (exit ${RC}):" >&2
@@ -140,7 +144,7 @@ MSG
 
 elif [ -n "${OPENAI_API_KEY:-}" ]; then
   echo "codex CLI が見つからないため OpenAI API を直接呼び出します。"
-  GPT_REVIEW_INSTRUCTIONS="$INSTRUCTIONS" python3 - "$DIFF_FILE" "$BODY_FILE" "$MODEL" "$RANGE" <<'PY'
+  GPT_REVIEW_INSTRUCTIONS="$INSTRUCTIONS" python3 - "$DIFF_FILE" "$BODY_FILE" "${MODEL:-gpt-5.1}" "$RANGE" <<'PY'
 import json, os, sys, urllib.request, urllib.error
 diff_f, out_f, model, rng = sys.argv[1:5]
 instructions = os.environ["GPT_REVIEW_INSTRUCTIONS"]
@@ -176,7 +180,7 @@ fi
   echo
   echo "- **課題ID**: \`${ISSUE_ID}\`"
   echo "- **日時**: $(date '+%Y-%m-%d %H:%M:%S %Z')"
-  echo "- **採点モデル**: \`${MODEL}\`（OpenAI — 実装者 Claude とは別ベンダー）"
+  echo "- **採点モデル**: \`${MODEL:-codex-default}\`（OpenAI — 実装者 Claude とは別ベンダー）"
   echo "- **対象**: ${RANGE}（${DIFF_LINES} 行）"
   echo "- **コミット**: \`$(git rev-parse --short HEAD 2>/dev/null || echo N/A)\`"
   echo

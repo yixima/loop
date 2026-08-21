@@ -135,7 +135,7 @@ src/ tests/                     動作確認用サンプル（実プロジェク
 | 用途 | ツール | 認証方法 |
 |---|---|---|
 | 設計・実装 | Claude Code | `claude` を起動してログイン、または `ANTHROPIC_API_KEY` |
-| レビュー（採点） | Codex CLI (OpenAI) | `codex login`（ChatGPT アカウント／ブラウザが開きます）、または `OPENAI_API_KEY` |
+| レビュー（採点） | Codex CLI (OpenAI) | `codex login`（ChatGPT アカウント／ブラウザが開きます）<br>ブラウザを開けない環境では `codex login --device-auth`<br>または `OPENAI_API_KEY` |
 
 現在の状態は `./scripts/setup.sh --check` で確認できます。
 

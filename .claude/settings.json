@@ -59,6 +59,6 @@
     ]
   },
   "env": {
-    "GPT_REVIEW_MODEL": "gpt-5.1-codex"
+    "_comment_GPT_REVIEW_MODEL": "レビューに使う OpenAI モデルを固定したい場合はここに GPT_REVIEW_MODEL を設定する。未設定なら Codex CLI の既定モデルを使う。"
   }
 }

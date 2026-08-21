@@ -77,8 +77,9 @@ else
 
        1) ChatGPT アカウントでログイン（Plus/Pro/Business 契約が必要）
             codex login
-          ブラウザが開きます。リモート/コンテナ上で実行している場合は、
-          表示された URL を手元のブラウザで開いて認証してください。
+          ブラウザが開きます。リモート/コンテナなどブラウザを開けない環境では
+            codex login --device-auth
+          を使い、表示されたコードを手元の端末のブラウザで入力してください。
 
        2) OpenAI API キーを使う（従量課金）
             export OPENAI_API_KEY=sk-...
