@@ -15,7 +15,9 @@
 #                           codex login --device-auth  （ブラウザを開けない環境向け）
 #   2) API キー:            export OPENAI_API_KEY=sk-...  してから実行
 #
-# 出力: docs/reviews/<ISSUE_ID>-<timestamp>.md  ／ 終了コード 0=実行成功, 3=認証エラー, 1=その他失敗
+# 出力: docs/reviews/<ISSUE_ID>-<timestamp>.md
+# 終了コード: 0=実行成功 / 1=その他失敗 / 3=本当に未認証（人間の認証操作が必要）
+#             4=サンドボックスの制約で実行できない（認証は通っている。外側で再実行すればよい）
 
 set -uo pipefail
 cd "$(dirname "$0")/.." || exit 2
@@ -103,8 +105,56 @@ BODY_FILE="$(mktemp)"
 RC=0
 
 if command -v codex >/dev/null 2>&1; then
-  if ! codex login status >/dev/null 2>&1 && [ -z "${OPENAI_API_KEY:-}" ]; then
-    cat >&2 <<'MSG'
+  # 認証状態の判定。
+  # 「認証されていない」と「サンドボックスの制約で確認できない」は別物なので必ず区別する。
+  # 混同すると、実際には認証済みなのに未認証と誤診断して、レビュー工程を不当に止めてしまう。
+  if [ -n "${OPENAI_API_KEY:-}" ]; then
+    :   # API キーがあるので認証確認は不要
+  else
+    LOGIN_OUT="$(codex login status 2>&1)"
+    LOGIN_RC=$?
+    if [ $LOGIN_RC -ne 0 ]; then
+      if printf '%s' "$LOGIN_OUT" | grep -qiE 'operation not permitted|permission denied|not permitted|EPERM|sandbox|denied'; then
+        cat >&2 <<MSG
+
+────────────────────────────────────────────────────────
+GPT レビューを実行できません: サンドボックスの制約で認証状態を確認できませんでした。
+
+  codex login status の出力: ${LOGIN_OUT}
+
+これは「未認証」ではありません。エージェントのサンドボックス内からは
+~/.codex/auth.json の読み取りと OpenAI への通信が遮断されるため、
+認証済みであってもこのエラーになります。
+
+対処: このスクリプトを **サンドボックス外** で実行してください。
+      Claude Code から呼ぶ場合は、サンドボックスを無効にする許可を
+      人間に求めたうえで実行します。
+      手動で確認するなら、ターミナルで直接次を実行してください。
+
+        codex login status
+        ISSUE_ID=${ISSUE_ID} ./scripts/gpt-review.sh
+────────────────────────────────────────────────────────
+MSG
+        exit 4
+      fi
+
+      if [ -f "$HOME/.codex/auth.json" ]; then
+        cat >&2 <<MSG
+
+────────────────────────────────────────────────────────
+GPT レビューを実行できません: 認証情報（~/.codex/auth.json）は存在しますが、
+codex login status が失敗しました。
+
+  出力: ${LOGIN_OUT}
+
+認証切れか、実行環境からの通信が遮断されている可能性があります。
+サンドボックス外で codex login status を実行して確認してください。
+────────────────────────────────────────────────────────
+MSG
+        exit 4
+      fi
+
+      cat >&2 <<'MSG'
 
 ────────────────────────────────────────────────────────
 GPT レビューを実行できません: Codex CLI が未認証です。
@@ -123,7 +173,8 @@ GPT レビューを実行できません: Codex CLI が未認証です。
        printenv OPENAI_API_KEY | codex login --with-api-key
 ────────────────────────────────────────────────────────
 MSG
-    exit 3
+      exit 3
+    fi
   fi
 
   CODEX_ARGS=(exec --sandbox read-only --skip-git-repo-check --color never -o "$BODY_FILE")
@@ -136,7 +187,12 @@ MSG
   if [ $RC -ne 0 ]; then
     echo "codex exec が失敗しました (exit ${RC}):" >&2
     tail -20 "${BODY_FILE}.err" >&2
-    grep -qiE '401|unauthor|auth|login|credential' "${BODY_FILE}.err" && RC=3
+    if grep -qiE 'operation not permitted|permission denied|sandbox|network.*(unreachable|denied)|dns' "${BODY_FILE}.err"; then
+      echo "→ サンドボックスの制約が原因の可能性があります。サンドボックス外で再実行してください。" >&2
+      RC=4
+    elif grep -qiE '401|unauthor|auth|login|credential' "${BODY_FILE}.err"; then
+      RC=3
+    fi
     rm -f "${BODY_FILE}.err"
     exit $RC
   fi
