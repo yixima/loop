@@ -11,10 +11,10 @@ from loopdemo import greet
 
 class TestGreet(unittest.TestCase):
     def test_通常の名前で挨拶文を返す(self):
-        self.assertEqual(greet("山田"), "こんにちは、山田さん")
+        self.assertEqual(greet("山田", hour=12), "こんにちは、山田さん")
 
     def test_前後の空白は取り除かれる(self):
-        self.assertEqual(greet("  山田  "), "こんにちは、山田さん")
+        self.assertEqual(greet("  山田  ", hour=12), "こんにちは、山田さん")
 
     def test_空文字はValueError(self):
         with self.assertRaises(ValueError):
