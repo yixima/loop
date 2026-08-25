@@ -44,16 +44,16 @@ else
 fi
 
 echo
-echo "[3/4] Python ツール（lint / test）"
-for pkg in pytest ruff; do
+echo "[3/4] Python ツール（lint / typecheck / test）"
+for pkg in pytest ruff mypy; do
   if has "$pkg"; then ok "$pkg"
   elif [ $CHECK_ONLY -eq 0 ]; then
     echo "  $pkg を導入します..."
     if has uv; then uv pip install --system "$pkg" >/dev/null 2>&1 || pip3 install --break-system-packages -q "$pkg" >/dev/null 2>&1
     else pip3 install --break-system-packages -q "$pkg" >/dev/null 2>&1; fi
-    has "$pkg" && ok "$pkg を導入しました" || warn "$pkg の導入に失敗（verify.sh は代替手段で動作します）"
+    has "$pkg" && ok "$pkg を導入しました" || warn "$pkg の導入に失敗。verify.sh の該当チェックが SKIP されます（停止条件が1つ減ります）"
   else
-    warn "$pkg が未導入（verify.sh は unittest / compileall で代替します）"
+    warn "$pkg が未導入。verify.sh の該当チェックが SKIP されます（停止条件が1つ減ります）"
   fi
 done
 

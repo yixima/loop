@@ -30,6 +30,7 @@ done
 RESULTS=()
 FAILED=0
 RAN=0
+SKIPPED=0
 
 if [ -t 1 ]; then C_G=$'\033[32m'; C_R=$'\033[31m'; C_Y=$'\033[33m'; C_0=$'\033[0m'
 else C_G=""; C_R=""; C_Y=""; C_0=""; fi
@@ -58,6 +59,7 @@ skip() {
   echo "── $1"
   echo "   ${C_Y}SKIP${C_0} $2"
   RESULTS+=("SKIP|$1")
+  SKIPPED=$((SKIPPED + 1))
   echo
 }
 
@@ -142,5 +144,14 @@ if [ $FAILED -gt 0 ]; then
   echo "${C_R}NOT DONE${C_0}: ${FAILED} 件のチェックが失敗しました。完了として扱わないでください。"
   exit 1
 fi
+
+if [ $SKIPPED -gt 0 ]; then
+  echo "${C_G}DONE${C_0}: 実行したチェックはすべて通りました。"
+  echo "${C_Y}ただし ${SKIPPED} 件が SKIP されています。その分だけ停止条件は弱くなっています。${C_0}"
+  echo "SKIP されたチェックは「合格」ではなく「未検査」です。報告時は必ず SKIP 件数を明示してください。"
+  echo "解消するには ./scripts/setup.sh を実行して不足しているツールを導入します。"
+  exit 0
+fi
+
 echo "${C_G}DONE${C_0}: すべてのチェックが通りました。停止条件を満たしています。"
 exit 0
